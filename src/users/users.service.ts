@@ -37,22 +37,28 @@ export class UsersService {
     return rows[0];
   }
 
-  async findById(id: number) {
-    const [rows] = await this.pool().execute<RowDataPacket[]>(
-      'SELECT id, username, role, created_at FROM users WHERE id = ?',
-      [id],
+
+async findById(id: number) {
+  const [rows] = await this.pool().execute<RowDataPacket[]>(
+    'SELECT id, username, role FROM users WHERE id = ?',
+    [id],
+  );
+
+  return rows[0];
+}
+
+
+ 
+async getAll() {
+  const [rows] = await this.db
+    .getPool()
+    .execute<RowDataPacket[]>(
+      'SELECT id, username, role FROM users',
     );
 
-    return rows[0];
-  }
+  return rows;
+}
 
-  async getAll() {
-    const [rows] = await this.pool().execute<RowDataPacket[]>(
-      'SELECT id, username, role, created_at FROM users',
-    );
-
-    return rows;
-  }
 
   async updateUser(
     id: number,
