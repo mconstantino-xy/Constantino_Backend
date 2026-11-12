@@ -1,8 +1,6 @@
-
 import { Module } from '@nestjs/common';
-import { CategoryModule } from './category/category.module';
-import { AuthModule } from './auth/auth.module';
 import { DatabaseModule } from './database/database.module';
+import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { RestaurantModule } from './restaurant/restaurant.module';
 import { OrdersModule } from './orders/orders.module';
@@ -11,7 +9,6 @@ import { OrdersModule } from './orders/orders.module';
   imports: [
     DatabaseModule,
     AuthModule,
-    CategoryModule,
     UsersModule,
     RestaurantModule,
     OrdersModule,

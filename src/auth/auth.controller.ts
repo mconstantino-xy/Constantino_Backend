@@ -1,4 +1,11 @@
-import { Controller, Post, Body } from '@nestjs/common';
+
+import {
+  Controller,
+  Post,
+  Body,
+  BadRequestException,
+} from '@nestjs/common';
+
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 
@@ -25,13 +32,29 @@ export class AuthController {
   @Post('login')
   async login(
     @Body() body: {
-      username: string;
-      password: string;
+      username?: string;
+      password?: string;
     },
   ) {
+    const username =
+      typeof body?.username === 'string'
+        ? body.username.trim()
+        : '';
+
+    const password =
+      typeof body?.password === 'string'
+        ? body.password
+        : '';
+
+    if (!username || !password) {
+      throw new BadRequestException(
+        'Username and password are required',
+      );
+    }
+
     const user = await this.authService.validateUser(
-      body.username,
-      body.password,
+      username,
+      password,
     );
 
     if (!user) {
@@ -43,21 +66,14 @@ export class AuthController {
     return this.authService.login(user);
   }
 
-  @Post('logout')
-  async logout(
-    @Body() body: {
-      userId: number;
-    },
-  ) {
-    return this.authService.logout(body.userId);
-  }
-
   @Post('refresh')
   async refresh(
     @Body() body: {
       refreshToken: string;
     },
   ) {
-    return this.authService.refreshTokens(body.refreshToken);
+    return this.authService.refreshTokens(
+      body.refreshToken,
+    );
   }
-}  
+}
