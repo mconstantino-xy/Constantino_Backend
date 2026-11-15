@@ -19,6 +19,11 @@ export class OrderDetailController {
     private readonly orderDetailService: OrderDetailService,
   ) {}
 
+  @Get()
+  getAll() {
+    return this.orderDetailService.getAll();
+  }
+
   @Get('order/:orderId')
   getByOrder(
     @Param('orderId', ParseIntPipe) orderId: number,

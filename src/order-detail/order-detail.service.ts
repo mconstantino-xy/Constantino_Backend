@@ -11,6 +11,27 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2';
 export class OrderDetailService {
   constructor(private readonly db: DatabaseService) {}
 
+  // GET ALL ORDER DETAILS
+  async getAll() {
+    const [rows] = await this.db.getPool().execute<RowDataPacket[]>(
+      `SELECT
+        od.order_detail_id,
+        od.order_id,
+        od.food_item_id,
+        fi.food_name,
+        od.quantity,
+        od.price,
+        od.subtotal
+      FROM order_detail od
+      LEFT JOIN food_item fi
+        ON od.food_item_id = fi.food_item_id
+      ORDER BY od.order_detail_id ASC`,
+    );
+
+    return rows;
+  }
+
+  // GET ORDER DETAILS BY ORDER ID
   async getByOrder(orderId: number) {
     const [rows] = await this.db.getPool().execute<RowDataPacket[]>(
       `SELECT
@@ -32,6 +53,7 @@ export class OrderDetailService {
     return rows;
   }
 
+  // CREATE ORDER DETAIL
   async create(data: {
     order_id: number;
     food_item_id: number;
