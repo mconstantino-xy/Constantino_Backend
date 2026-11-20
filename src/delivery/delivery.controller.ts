@@ -9,10 +9,19 @@ import {
   Param,
   ParseIntPipe,
   UseGuards,
+  Req,
+  ForbiddenException,
 } from '@nestjs/common';
-
 import { AuthGuard } from '@nestjs/passport';
+import { Request } from 'express';
 import { DeliveryService } from './delivery.service';
+
+type AuthRequest = Request & {
+  user: {
+    userId: number;
+    role: string;
+  };
+};
 
 @Controller('delivery')
 @UseGuards(AuthGuard('jwt'))
@@ -22,15 +31,24 @@ export class DeliveryController {
   ) {}
 
   @Get()
-  getAll() {
+  getAll(@Req() req: AuthRequest) {
+    if (req.user.role !== 'admin') {
+      throw new ForbiddenException('Admin access only');
+    }
+
     return this.deliveryService.getAll();
   }
 
   @Get(':id')
   getById(
     @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthRequest,
   ) {
-    return this.deliveryService.getById(id);
+    return this.deliveryService.getByIdForUser(
+      id,
+      req.user.userId,
+      req.user.role === 'admin',
+    );
   }
 
   @Post()
@@ -39,10 +57,14 @@ export class DeliveryController {
     body: {
       order_id: number;
       delivery_address: string;
-      delivery_status?: string;
     },
+    @Req() req: AuthRequest,
   ) {
-    return this.deliveryService.create(body);
+    return this.deliveryService.create(
+      body,
+      req.user.userId,
+      req.user.role === 'admin',
+    );
   }
 
   @Put(':id')
@@ -53,14 +75,24 @@ export class DeliveryController {
       delivery_address?: string;
       delivery_status?: string;
     },
+    @Req() req: AuthRequest,
   ) {
+    if (req.user.role !== 'admin') {
+      throw new ForbiddenException('Admin access only');
+    }
+
     return this.deliveryService.update(id, body);
   }
 
   @Delete(':id')
   delete(
     @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthRequest,
   ) {
+    if (req.user.role !== 'admin') {
+      throw new ForbiddenException('Admin access only');
+    }
+
     return this.deliveryService.delete(id);
   }
 }

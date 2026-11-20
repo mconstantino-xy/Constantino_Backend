@@ -11,7 +11,6 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2';
 export class OrdersService {
   constructor(private readonly db: DatabaseService) {}
 
-  // GET all orders with customer and restaurant information
   async getAll() {
     const [rows] = await this.db.getPool().execute<RowDataPacket[]>(`
       SELECT
@@ -35,7 +34,6 @@ export class OrdersService {
     return rows;
   }
 
-  // GET orders by user ID
   async getByUser(userId: number) {
     const [rows] = await this.db.getPool().execute<RowDataPacket[]>(
       `SELECT
@@ -60,7 +58,6 @@ export class OrdersService {
     return rows;
   }
 
-  // POST new order
   async create(data: {
     user_id: number;
     restaurant_id: number;
@@ -87,7 +84,6 @@ export class OrdersService {
     };
   }
 
-  // PUT update order
   async update(
     id: number,
     data: {
@@ -121,7 +117,9 @@ export class OrdersService {
     }
 
     if (fields.length === 0) {
-      throw new BadRequestException('No fields provided for update');
+      throw new BadRequestException(
+        'No fields provided for update',
+      );
     }
 
     values.push(id);
@@ -146,9 +144,7 @@ export class OrdersService {
     return { message: 'Order updated successfully' };
   }
 
-  // DELETE order
   async delete(id: number) {
-    // Check if order has related records
     const [references] = await this.db.getPool().execute<RowDataPacket[]>(
       `SELECT
         (SELECT COUNT(*) FROM order_detail WHERE order_id = ?) AS detail_count,

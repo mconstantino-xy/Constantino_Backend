@@ -9,10 +9,19 @@ import {
   Param,
   ParseIntPipe,
   UseGuards,
+  Req,
+  ForbiddenException,
 } from '@nestjs/common';
-
 import { AuthGuard } from '@nestjs/passport';
+import { Request } from 'express';
 import { PaymentService } from './payment.service';
+
+type AuthRequest = Request & {
+  user: {
+    userId: number;
+    role: string;
+  };
+};
 
 @Controller('payment')
 @UseGuards(AuthGuard('jwt'))
@@ -22,15 +31,24 @@ export class PaymentController {
   ) {}
 
   @Get()
-  getAll() {
+  getAll(@Req() req: AuthRequest) {
+    if (req.user.role !== 'admin') {
+      throw new ForbiddenException('Admin access only');
+    }
+
     return this.paymentService.getAll();
   }
 
   @Get(':id')
   getById(
     @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthRequest,
   ) {
-    return this.paymentService.getById(id);
+    return this.paymentService.getByIdForUser(
+      id,
+      req.user.userId,
+      req.user.role === 'admin',
+    );
   }
 
   @Post()
@@ -39,11 +57,14 @@ export class PaymentController {
     body: {
       order_id: number;
       payment_method: string;
-      amount: number;
-      payment_status?: string;
     },
+    @Req() req: AuthRequest,
   ) {
-    return this.paymentService.create(body);
+    return this.paymentService.create(
+      body,
+      req.user.userId,
+      req.user.role === 'admin',
+    );
   }
 
   @Put(':id')
@@ -55,14 +76,24 @@ export class PaymentController {
       amount?: number;
       payment_status?: string;
     },
+    @Req() req: AuthRequest,
   ) {
+    if (req.user.role !== 'admin') {
+      throw new ForbiddenException('Admin access only');
+    }
+
     return this.paymentService.update(id, body);
   }
 
   @Delete(':id')
   delete(
     @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthRequest,
   ) {
+    if (req.user.role !== 'admin') {
+      throw new ForbiddenException('Admin access only');
+    }
+
     return this.paymentService.delete(id);
   }
 }

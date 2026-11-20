@@ -3,8 +3,8 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
-
 import { DatabaseService } from '../database/database.service';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 
@@ -12,7 +12,6 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2';
 export class PaymentService {
   constructor(private readonly db: DatabaseService) {}
 
-  // GET ALL PAYMENTS
   async getAll() {
     const [rows] = await this.db.getPool().execute<RowDataPacket[]>(
       `SELECT
@@ -29,7 +28,6 @@ export class PaymentService {
     return rows;
   }
 
-  // GET PAYMENT BY ID
   async getById(id: number) {
     const [rows] = await this.db.getPool().execute<RowDataPacket[]>(
       `SELECT
@@ -51,31 +49,77 @@ export class PaymentService {
     return rows[0];
   }
 
-  // CREATE PAYMENT
-  async create(data: {
-    order_id: number;
-    payment_method: string;
-    amount: number;
-    payment_status?: string;
-  }) {
-    const {
-      order_id,
-      payment_method,
-      amount,
-      payment_status,
-    } = data;
+  async getByIdForUser(
+    id: number,
+    userId: number,
+    isAdmin: boolean,
+  ) {
+    const [rows] = await this.db.getPool().execute<RowDataPacket[]>(
+      `SELECT
+        p.payment_id,
+        p.order_id,
+        p.payment_method,
+        p.amount,
+        p.payment_status,
+        p.payment_date,
+        o.user_id
+      FROM payment p
+      INNER JOIN orders o ON p.order_id = o.order_id
+      WHERE p.payment_id = ?`,
+      [id],
+    );
 
-    if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
-      throw new BadRequestException('Amount must be greater than zero');
+    if (rows.length === 0) {
+      throw new NotFoundException('Payment not found');
     }
 
+    if (
+      !isAdmin &&
+      Number(rows[0].user_id) !== Number(userId)
+    ) {
+      throw new ForbiddenException(
+        'You can only access your own payment',
+      );
+    }
+
+    const { user_id, ...payment } = rows[0];
+    return payment;
+  }
+
+  async create(
+    data: {
+      order_id: number;
+      payment_method: string;
+    },
+    userId: number,
+    isAdmin: boolean,
+  ) {
+    const { order_id, payment_method } = data;
+
     const [orders] = await this.db.getPool().execute<RowDataPacket[]>(
-      'SELECT order_id FROM orders WHERE order_id = ?',
+      'SELECT user_id, total_amount FROM orders WHERE order_id = ?',
       [order_id],
     );
 
     if (orders.length === 0) {
       throw new NotFoundException('Order not found');
+    }
+
+    if (
+      !isAdmin &&
+      Number(orders[0].user_id) !== Number(userId)
+    ) {
+      throw new ForbiddenException(
+        'You can only pay for your own order',
+      );
+    }
+
+    const amount = Number(orders[0].total_amount);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new BadRequestException(
+        'Order total must be greater than zero',
+      );
     }
 
     const [existingPayments] = await this.db
@@ -102,19 +146,11 @@ export class PaymentService {
       throw new BadRequestException('Invalid payment method');
     }
 
-    const status = payment_status || 'Pending';
-
-    const allowedStatuses = ['Pending', 'Paid', 'Failed'];
-
-    if (!allowedStatuses.includes(status)) {
-      throw new BadRequestException('Invalid payment status');
-    }
-
     const [result] = await this.db.getPool().execute<ResultSetHeader>(
       `INSERT INTO payment
        (order_id, payment_method, amount, payment_status)
        VALUES (?, ?, ?, ?)`,
-      [order_id, payment_method, Number(amount), status],
+      [order_id, payment_method, amount, 'Pending'],
     );
 
     return {
@@ -122,12 +158,11 @@ export class PaymentService {
       payment_id: result.insertId,
       order_id,
       payment_method,
-      amount: Number(amount),
-      payment_status: status,
+      amount,
+      payment_status: 'Pending',
     };
   }
 
-  // UPDATE PAYMENT
   async update(
     id: number,
     data: {
@@ -161,7 +196,9 @@ export class PaymentService {
     }
 
     if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
-      throw new BadRequestException('Amount must be greater than zero');
+      throw new BadRequestException(
+        'Amount must be greater than zero',
+      );
     }
 
     if (!allowedStatuses.includes(payment_status)) {
@@ -186,7 +223,6 @@ export class PaymentService {
     };
   }
 
-  // DELETE PAYMENT
   async delete(id: number) {
     await this.getById(id);
 

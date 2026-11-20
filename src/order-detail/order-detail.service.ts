@@ -3,6 +3,7 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
@@ -11,7 +12,6 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2';
 export class OrderDetailService {
   constructor(private readonly db: DatabaseService) {}
 
-  // GET ALL ORDER DETAILS
   async getAll() {
     const [rows] = await this.db.getPool().execute<RowDataPacket[]>(
       `SELECT
@@ -31,8 +31,13 @@ export class OrderDetailService {
     return rows;
   }
 
-  // GET ORDER DETAILS BY ORDER ID
-  async getByOrder(orderId: number) {
+  async getByOrder(
+    orderId: number,
+    userId: number,
+    isAdmin: boolean,
+  ) {
+    await this.checkOrderAccess(orderId, userId, isAdmin);
+
     const [rows] = await this.db.getPool().execute<RowDataPacket[]>(
       `SELECT
         od.order_detail_id,
@@ -53,30 +58,47 @@ export class OrderDetailService {
     return rows;
   }
 
-  // CREATE ORDER DETAIL
-  async create(data: {
-    order_id: number;
-    food_item_id: number;
-    quantity: number;
-  }) {
-    const { order_id, food_item_id, quantity } = data;
-
-    if (
-      !Number.isInteger(quantity) ||
-      quantity <= 0
-    ) {
-      throw new BadRequestException(
-        'Quantity must be a positive whole number',
-      );
-    }
-
+  private async checkOrderAccess(
+    orderId: number,
+    userId: number,
+    isAdmin: boolean,
+  ) {
     const [orders] = await this.db.getPool().execute<RowDataPacket[]>(
-      'SELECT order_id FROM orders WHERE order_id = ?',
-      [order_id],
+      'SELECT user_id FROM orders WHERE order_id = ?',
+      [orderId],
     );
 
     if (orders.length === 0) {
       throw new NotFoundException('Order not found');
+    }
+
+    if (
+      !isAdmin &&
+      Number(orders[0].user_id) !== Number(userId)
+    ) {
+      throw new ForbiddenException(
+        'You can only access your own order',
+      );
+    }
+  }
+
+  async create(
+    data: {
+      order_id: number;
+      food_item_id: number;
+      quantity: number;
+    },
+    userId: number,
+    isAdmin: boolean,
+  ) {
+    const { order_id, food_item_id, quantity } = data;
+
+    await this.checkOrderAccess(order_id, userId, isAdmin);
+
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      throw new BadRequestException(
+        'Quantity must be a positive whole number',
+      );
     }
 
     const [foods] = await this.db.getPool().execute<RowDataPacket[]>(
@@ -102,6 +124,17 @@ export class OrderDetailService {
        (order_id, food_item_id, quantity, price, subtotal)
        VALUES (?, ?, ?, ?, ?)`,
       [order_id, food_item_id, quantity, price, subtotal],
+    );
+
+    await this.db.getPool().execute(
+      `UPDATE orders
+       SET total_amount = (
+         SELECT COALESCE(SUM(subtotal), 0)
+         FROM order_detail
+         WHERE order_id = ?
+       )
+       WHERE order_id = ?`,
+      [order_id, order_id],
     );
 
     return {

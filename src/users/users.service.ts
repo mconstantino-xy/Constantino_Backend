@@ -1,3 +1,4 @@
+
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { RowDataPacket, OkPacket } from 'mysql2';
@@ -8,13 +9,11 @@ export class UsersService {
   constructor(private db: DatabaseService) {}
 
   private pool = () => this.db.getPool();
-  
-  async createUser(
-    username: string,
-    password: string,
-    role = 'user',
-  ) {
+
+  async createUser(username: string, password: string) {
     const hashed = await bcrypt.hash(password, 10);
+
+    const role = 'user';
 
     const [result] = await this.pool().execute<OkPacket>(
       'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
@@ -37,28 +36,22 @@ export class UsersService {
     return rows[0];
   }
 
+  async findById(id: number) {
+    const [rows] = await this.pool().execute<RowDataPacket[]>(
+      'SELECT id, username, role FROM users WHERE id = ?',
+      [id],
+    );
 
-async findById(id: number) {
-  const [rows] = await this.pool().execute<RowDataPacket[]>(
-    'SELECT id, username, role FROM users WHERE id = ?',
-    [id],
-  );
+    return rows[0];
+  }
 
-  return rows[0];
-}
-
-
- 
-async getAll() {
-  const [rows] = await this.db
-    .getPool()
-    .execute<RowDataPacket[]>(
+  async getAll() {
+    const [rows] = await this.pool().execute<RowDataPacket[]>(
       'SELECT id, username, role FROM users',
     );
 
-  return rows;
-}
-
+    return rows;
+  }
 
   async updateUser(
     id: number,
