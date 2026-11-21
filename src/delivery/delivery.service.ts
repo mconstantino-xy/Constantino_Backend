@@ -18,6 +18,7 @@ export class DeliveryService {
       `SELECT
         d.delivery_id,
         d.order_id,
+        d.delivery_contact,
         d.delivery_address,
         d.delivery_status,
         d.delivery_date
@@ -33,6 +34,7 @@ export class DeliveryService {
       `SELECT
         delivery_id,
         order_id,
+        delivery_contact,
         delivery_address,
         delivery_status,
         delivery_date
@@ -48,6 +50,47 @@ export class DeliveryService {
     return rows[0];
   }
 
+  // CUSTOMER AND ADMIN: Get delivery using order ID
+  async getByOrderForUser(
+    orderId: number,
+    userId: number,
+    isAdmin: boolean,
+  ) {
+    const [orders] = await this.db.getPool().execute<RowDataPacket[]>(
+      'SELECT user_id FROM orders WHERE order_id = ?',
+      [orderId],
+    );
+
+    if (orders.length === 0) {
+      throw new NotFoundException('Order not found');
+    }
+
+    if (
+      !isAdmin &&
+      Number(orders[0].user_id) !== Number(userId)
+    ) {
+      throw new ForbiddenException(
+        'You can only access your own delivery',
+      );
+    }
+
+    const [rows] = await this.db.getPool().execute<RowDataPacket[]>(
+      `SELECT
+        delivery_id,
+        order_id,
+        delivery_contact,
+        delivery_address,
+        delivery_status,
+        delivery_date
+      FROM delivery
+      WHERE order_id = ?
+      LIMIT 1`,
+      [orderId],
+    );
+
+    return rows[0] ?? null;
+  }
+
   async getByIdForUser(
     id: number,
     userId: number,
@@ -57,6 +100,7 @@ export class DeliveryService {
       `SELECT
         d.delivery_id,
         d.order_id,
+        d.delivery_contact,
         d.delivery_address,
         d.delivery_status,
         d.delivery_date,
@@ -87,12 +131,30 @@ export class DeliveryService {
   async create(
     data: {
       order_id: number;
+      delivery_contact: string;
       delivery_address: string;
     },
     userId: number,
     isAdmin: boolean,
   ) {
-    const { order_id, delivery_address } = data;
+    const {
+      order_id,
+      delivery_contact,
+      delivery_address,
+    } = data;
+
+    if (!order_id || Number(order_id) <= 0) {
+      throw new BadRequestException('Valid order ID is required');
+    }
+
+    if (
+      !delivery_contact ||
+      delivery_contact.trim().length === 0
+    ) {
+      throw new BadRequestException(
+        'Delivery contact number is required',
+      );
+    }
 
     if (
       !delivery_address ||
@@ -134,18 +196,32 @@ export class DeliveryService {
       );
     }
 
+    const cleanContact = delivery_contact.trim();
+    const cleanAddress = delivery_address.trim();
+
     const [result] = await this.db.getPool().execute<ResultSetHeader>(
       `INSERT INTO delivery
-       (order_id, delivery_address, delivery_status)
-       VALUES (?, ?, ?)`,
-      [order_id, delivery_address.trim(), 'Pending'],
+       (
+         order_id,
+         delivery_contact,
+         delivery_address,
+         delivery_status
+       )
+       VALUES (?, ?, ?, ?)`,
+      [
+        order_id,
+        cleanContact,
+        cleanAddress,
+        'Pending',
+      ],
     );
 
     return {
       message: 'Delivery created successfully',
       delivery_id: result.insertId,
       order_id,
-      delivery_address: delivery_address.trim(),
+      delivery_contact: cleanContact,
+      delivery_address: cleanAddress,
       delivery_status: 'Pending',
     };
   }
@@ -153,17 +229,30 @@ export class DeliveryService {
   async update(
     id: number,
     data: {
+      delivery_contact?: string;
       delivery_address?: string;
       delivery_status?: string;
     },
   ) {
     const existing = await this.getById(id);
 
+    const delivery_contact =
+      data.delivery_contact ?? existing.delivery_contact;
+
     const delivery_address =
       data.delivery_address ?? existing.delivery_address;
 
     const delivery_status =
       data.delivery_status ?? existing.delivery_status;
+
+    if (
+      !delivery_contact ||
+      delivery_contact.trim().length === 0
+    ) {
+      throw new BadRequestException(
+        'Delivery contact number is required',
+      );
+    }
 
     if (
       !delivery_address ||
@@ -186,18 +275,28 @@ export class DeliveryService {
       throw new BadRequestException('Invalid delivery status');
     }
 
+    const cleanContact = delivery_contact.trim();
+    const cleanAddress = delivery_address.trim();
+
     await this.db.getPool().execute(
       `UPDATE delivery
-       SET delivery_address = ?,
+       SET delivery_contact = ?,
+           delivery_address = ?,
            delivery_status = ?
        WHERE delivery_id = ?`,
-      [delivery_address.trim(), delivery_status, id],
+      [
+        cleanContact,
+        cleanAddress,
+        delivery_status,
+        id,
+      ],
     );
 
     return {
       message: 'Delivery updated successfully',
       delivery_id: id,
-      delivery_address: delivery_address.trim(),
+      delivery_contact: cleanContact,
+      delivery_address: cleanAddress,
       delivery_status,
     };
   }

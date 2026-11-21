@@ -30,6 +30,7 @@ export class PaymentController {
     private readonly paymentService: PaymentService,
   ) {}
 
+  // ADMIN ONLY: Get all payments
   @Get()
   getAll(@Req() req: AuthRequest) {
     if (req.user.role !== 'admin') {
@@ -39,6 +40,20 @@ export class PaymentController {
     return this.paymentService.getAll();
   }
 
+  // CUSTOMER AND ADMIN: Get payment by order
+  @Get('order/:orderId')
+  getByOrder(
+    @Param('orderId', ParseIntPipe) orderId: number,
+    @Req() req: AuthRequest,
+  ) {
+    return this.paymentService.getByOrderForUser(
+      orderId,
+      req.user.userId,
+      req.user.role === 'admin',
+    );
+  }
+
+  // CUSTOMER AND ADMIN: Get payment by ID
   @Get(':id')
   getById(
     @Param('id', ParseIntPipe) id: number,
@@ -51,6 +66,7 @@ export class PaymentController {
     );
   }
 
+  // CUSTOMER AND ADMIN: Create payment for own order
   @Post()
   create(
     @Body()
@@ -67,6 +83,7 @@ export class PaymentController {
     );
   }
 
+  // ADMIN ONLY: Update payment
   @Put(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -85,6 +102,7 @@ export class PaymentController {
     return this.paymentService.update(id, body);
   }
 
+  // ADMIN ONLY: Delete payment
   @Delete(':id')
   delete(
     @Param('id', ParseIntPipe) id: number,

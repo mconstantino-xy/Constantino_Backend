@@ -1,5 +1,8 @@
 
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+} from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { RowDataPacket, OkPacket } from 'mysql2';
 import * as bcrypt from 'bcryptjs';
@@ -11,20 +14,49 @@ export class UsersService {
   private pool = () => this.db.getPool();
 
   async createUser(username: string, password: string) {
-    const hashed = await bcrypt.hash(password, 10);
+    const cleanUsername = username.trim();
 
-    const role = 'user';
+    if (!cleanUsername || !password) {
+      throw new ConflictException(
+        'Username and password are required.',
+      );
+    }
 
-    const [result] = await this.pool().execute<OkPacket>(
-      'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
-      [username, hashed, role],
+    const [existingUsers] = await this.pool().execute<RowDataPacket[]>(
+      'SELECT id FROM users WHERE username = ?',
+      [cleanUsername],
     );
 
-    return {
-      id: result.insertId,
-      username,
-      role,
-    };
+    if (existingUsers.length > 0) {
+      throw new ConflictException(
+        'Username already exists. Please try another one.',
+      );
+    }
+
+    const hashed = await bcrypt.hash(password, 10);
+    const role = 'user';
+
+    try {
+      const [result] = await this.pool().execute<OkPacket>(
+        'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
+        [cleanUsername, hashed, role],
+      );
+
+      return {
+        id: result.insertId,
+        username: cleanUsername,
+        role,
+        message: 'Account created successfully. You can now sign in.',
+      };
+    } catch (error: any) {
+      if (error.code === 'ER_DUP_ENTRY') {
+        throw new ConflictException(
+          'Username already exists. Please try another one.',
+        );
+      }
+
+      throw error;
+    }
   }
 
   async findByUsername(username: string) {
@@ -66,7 +98,7 @@ export class UsersService {
 
     if (partial.username) {
       fields.push('username = ?');
-      values.push(partial.username);
+      values.push(partial.username.trim());
     }
 
     if (partial.password) {

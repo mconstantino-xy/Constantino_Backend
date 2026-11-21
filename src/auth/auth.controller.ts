@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   BadRequestException,
+  UnauthorizedException,
 } from '@nestjs/common';
 
 import { AuthService } from './auth.service';
@@ -19,14 +20,27 @@ export class AuthController {
   @Post('register')
   async register(
     @Body() body: {
-      username: string;
-      password: string;
+      username?: string;
+      password?: string;
     },
   ) {
-    return this.usersService.createUser(
-      body.username,
-      body.password,
-    );
+    const username =
+      typeof body?.username === 'string'
+        ? body.username.trim()
+        : '';
+
+    const password =
+      typeof body?.password === 'string'
+        ? body.password
+        : '';
+
+    if (!username || !password) {
+      throw new BadRequestException(
+        'Username and password are required.',
+      );
+    }
+
+    return this.usersService.createUser(username, password);
   }
 
   @Post('login')
@@ -48,7 +62,7 @@ export class AuthController {
 
     if (!username || !password) {
       throw new BadRequestException(
-        'Username and password are required',
+        'Username and password are required.',
       );
     }
 
@@ -58,9 +72,9 @@ export class AuthController {
     );
 
     if (!user) {
-      return {
-        error: 'Invalid credentials',
-      };
+      throw new UnauthorizedException(
+        'Account not found. Please sign up first to create an account.',
+      );
     }
 
     return this.authService.login(user);
@@ -69,9 +83,18 @@ export class AuthController {
   @Post('refresh')
   async refresh(
     @Body() body: {
-      refreshToken: string;
+      refreshToken?: string;
     },
   ) {
+    if (
+      typeof body?.refreshToken !== 'string' ||
+      !body.refreshToken
+    ) {
+      throw new BadRequestException(
+        'Refresh token is required.',
+      );
+    }
+
     return this.authService.refreshTokens(
       body.refreshToken,
     );

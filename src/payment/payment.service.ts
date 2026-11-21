@@ -49,6 +49,47 @@ export class PaymentService {
     return rows[0];
   }
 
+  // CUSTOMER AND ADMIN: Get payment using order ID
+  async getByOrderForUser(
+    orderId: number,
+    userId: number,
+    isAdmin: boolean,
+  ) {
+    const [orders] = await this.db.getPool().execute<RowDataPacket[]>(
+      'SELECT user_id FROM orders WHERE order_id = ?',
+      [orderId],
+    );
+
+    if (orders.length === 0) {
+      throw new NotFoundException('Order not found');
+    }
+
+    if (
+      !isAdmin &&
+      Number(orders[0].user_id) !== Number(userId)
+    ) {
+      throw new ForbiddenException(
+        'You can only access your own payment',
+      );
+    }
+
+    const [rows] = await this.db.getPool().execute<RowDataPacket[]>(
+      `SELECT
+        payment_id,
+        order_id,
+        payment_method,
+        amount,
+        payment_status,
+        payment_date
+      FROM payment
+      WHERE order_id = ?
+      LIMIT 1`,
+      [orderId],
+    );
+
+    return rows[0] ?? null;
+  }
+
   async getByIdForUser(
     id: number,
     userId: number,
